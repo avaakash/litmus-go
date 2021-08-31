@@ -120,6 +120,9 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 					return errors.Errorf("%v", err)
 				}
 				azureStatus.GetRunCommandResult(&result)
+				if err = azureStatus.CheckRunCommandResultError(&result); err != nil {
+					return err
+				}
 			}
 
 			duration = int(time.Since(ChaosStartTimeStamp).Seconds())
@@ -151,13 +154,11 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 			// Running scripts serially
 			for _, vmName := range instanceNameList {
 
-				runCommandFutures := []experimentTypes.RunCommandFuture{}
 				log.Infof("[Chaos]: Running script on the Azure instance: %v", vmName)
 				runCommandFuture := experimentTypes.RunCommandFuture{}
 				if err := azureStatus.PerformRunCommand(experimentsDetails, &runCommandFuture, vmName, false); err != nil {
 					return errors.Errorf("unable to run script on azure instance, err: %v", err)
 				}
-				runCommandFutures = append(runCommandFutures, runCommandFuture)
 
 				// Run probes during chaos
 				if len(resultDetails.ProbeDetails) != 0 {
@@ -171,11 +172,14 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 				common.WaitForDuration(experimentsDetails.ChaosInterval)
 
 				log.Infof("[Wait]: Waiting for script execution completion on instance: %v", vmName)
-				result, err := azureStatus.WaitForRunCommandCompletion(experimentsDetails, &runCommandFutures[i])
+				result, err := azureStatus.WaitForRunCommandCompletion(experimentsDetails, &runCommandFuture)
 				if err != nil {
 					return errors.Errorf("%v", err)
 				}
 				azureStatus.GetRunCommandResult(&result)
+				if err = azureStatus.CheckRunCommandResultError(&result); err != nil {
+					return err
+				}
 			}
 			duration = int(time.Since(ChaosStartTimeStamp).Seconds())
 		}
@@ -205,6 +209,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanc
 			log.Errorf("%v", err)
 		}
 		azureStatus.GetRunCommandResult(&result)
+		if err = azureStatus.CheckRunCommandResultError(&result); err != nil {
+			log.Errorf("failed to abort script due to %v", err)
+		}
 	}
 	log.Infof("[Abort]: Chaos Revert Completed")
 	os.Exit(1)

@@ -154,26 +154,31 @@ func prepareRunCommandInput(experimentDetails *experimentTypes.ExperimentDetails
 	var script []string
 	var parameters []compute.RunCommandInputParameter
 
-	// Checking if custom script path is provided or using the default if not
-	if strings.TrimSpace(experimentDetails.ScriptPath) != "" {
-		scriptPath, _ = filepath.Abs(experimentDetails.ScriptPath)
-	} else {
-		scriptPath, _ = filepath.Abs("pkg/azure/run-command/scripts/run_script.sh")
-		if parameters, err = prepareInputParameters(experimentDetails); err != nil {
-			return compute.RunCommandInput{}, errors.Errorf("failed to setup input parameters, err: %v", err)
-		}
-	}
-	// Reading script from the file path
-	script, err = readLines(scriptPath)
-	if err != nil {
-		return compute.RunCommandInput{}, errors.Errorf("failed to read script, err: %v", err)
-	}
-
 	// Setting up command id based on operating system of VM
 	if experimentDetails.OperatingSystem == "windows" {
 		commandId = "RunPowerShellScript"
 	} else {
 		commandId = "RunShellScript"
+	}
+
+	// Checking for custom script
+	if strings.TrimSpace(experimentDetails.ScriptPath) != "" {
+		scriptPath, _ = filepath.Abs(experimentDetails.ScriptPath)
+	} else {
+		if experimentDetails.OperatingSystem == "windows" {
+			return compute.RunCommandInput{}, errors.Errorf("default script not present for windows, provide custom script")
+		} else {
+			scriptPath, _ = filepath.Abs("pkg/azure/run-command/scripts/run_script.sh")
+			if parameters, err = prepareInputParameters(experimentDetails); err != nil {
+				return compute.RunCommandInput{}, errors.Errorf("failed to setup input parameters, err: %v", err)
+			}
+		}
+	}
+
+	// Reading script from the file path
+	script, err = readLines(scriptPath)
+	if err != nil {
+		return compute.RunCommandInput{}, errors.Errorf("failed to read script, err: %v", err)
 	}
 
 	runCommandInput := compute.RunCommandInput{
