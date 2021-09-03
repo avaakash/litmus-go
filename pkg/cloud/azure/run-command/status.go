@@ -50,15 +50,16 @@ func CheckRunCommandResultError(result *compute.RunCommandResult) error {
 	errorCode = nil
 
 	if message[i+1] != "" {
-		exitCodeRegex := regexp.MustCompile("exit code")
+		exitCodeRegex := regexp.MustCompile("error:")
 		for ; i < len(message); i++ {
 			// errorCodes = append(errorCodes, exitCodeRegex.FindStringIndex())
 			errorCode = exitCodeRegex.FindStringIndex(message[i])
+			break
 		}
 	}
 
 	if errorCode != nil {
-		return errors.Errorf("Script failed due to %v", errorCode)
+		return errors.Errorf("Script failed due to %v", message[errorCode[0]:])
 	}
 
 	return nil

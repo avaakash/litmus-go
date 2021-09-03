@@ -1,14 +1,13 @@
 package azure
 
 import (
-	"bufio"
 	"context"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/run-command/types"
+	azureCommon "github.com/litmuschaos/litmus-go/pkg/cloud/azure/common"
 
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -128,23 +127,6 @@ func GetScaleSetNameAndInstanceId(instanceName string) (string, string) {
 	return scaleSetAndInstanceId[0], scaleSetAndInstanceId[1]
 }
 
-// readLines reads a whole file into memory
-// and returns a slice of its lines.
-func readLines(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	return lines, scanner.Err()
-}
-
 // prepareRunCommandInput prepares the run command with the script, parameters and commandID
 func prepareRunCommandInput(experimentDetails *experimentTypes.ExperimentDetails) (compute.RunCommandInput, error) {
 
@@ -176,7 +158,7 @@ func prepareRunCommandInput(experimentDetails *experimentTypes.ExperimentDetails
 	}
 
 	// Reading script from the file path
-	script, err = readLines(scriptPath)
+	script, err = azureCommon.ReadLines(scriptPath)
 	if err != nil {
 		return compute.RunCommandInput{}, errors.Errorf("failed to read script, err: %v", err)
 	}
@@ -206,7 +188,7 @@ func prepareAbortRunCommandInput(experimentDetails *experimentTypes.ExperimentDe
 	}
 
 	// Reading script from the file path
-	script, err = readLines(scriptPath)
+	script, err = azureCommon.ReadLines(scriptPath)
 	if err != nil {
 		return compute.RunCommandInput{}, errors.Errorf("failed to read script, err: %v", err)
 	}
@@ -293,7 +275,7 @@ func prepareInputParameters(experimentDetails *experimentTypes.ExperimentDetails
 		}
 
 	default:
-		return nil, errors.Errorf("stressor for experiment type: %v is not suported", experimentDetails.ExperimentName)
+		return nil, errors.Errorf("stressor for experiment type: %v is not supported", experimentDetails.ExperimentName)
 	}
 
 	// Adding " to start and end of strings

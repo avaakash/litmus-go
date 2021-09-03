@@ -5,7 +5,8 @@ import (
 	experimentEnv "github.com/litmuschaos/litmus-go/pkg/azure/run-command/environment"
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/run-command/types"
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
-	azureStatus "github.com/litmuschaos/litmus-go/pkg/cloud/azure/instance"
+	azureCommon "github.com/litmuschaos/litmus-go/pkg/cloud/azure/common"
+
 	"github.com/litmuschaos/litmus-go/pkg/events"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
@@ -19,6 +20,7 @@ import (
 // Experiment contains steps to inject chaos
 func AzureRunCommandExperiment(clients clients.ClientSets) {
 
+	var err error
 	experimentsDetails := experimentTypes.ExperimentDetails{}
 	resultDetails := types.ResultDetails{}
 	eventsDetails := types.EventDetails{}
@@ -81,7 +83,7 @@ func AzureRunCommandExperiment(clients clients.ClientSets) {
 		return
 	}
 	// Setting up Azure Subscription ID
-	if err := azureStatus.RCSetupSubscriptionID(&experimentsDetails); err != nil {
+	if experimentsDetails.SubscriptionID, err = azureCommon.GetSubscriptionID(); err != nil {
 		log.Errorf("fail to get the subscription id, err: %v", err)
 		failStep := "Getting the subscription ID for authentication"
 		result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)
