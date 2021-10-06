@@ -5,7 +5,7 @@ import (
 
 	clientTypes "k8s.io/apimachinery/pkg/types"
 
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/run-command/types"
+	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/http-chaos/types"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 )
@@ -19,16 +19,14 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ChaosNamespace = common.Getenv("CHAOS_NAMESPACE", "litmus")
 	experimentDetails.EngineName = common.Getenv("CHAOSENGINE", "")
 	experimentDetails.ChaosDuration, _ = strconv.Atoi(common.Getenv("TOTAL_CHAOS_DURATION", "30"))
-	experimentDetails.ChaosInterval, _ = strconv.Atoi(common.Getenv("CHAOS_INTERVAL", "30"))
+	experimentDetails.ChaosInterval, _ = strconv.Atoi(common.Getenv("CHAOS_INTERVAL", "10"))
 	experimentDetails.RampTime, _ = strconv.Atoi(common.Getenv("RAMP_TIME", "0"))
 	experimentDetails.ChaosLib = common.Getenv("LIB", "litmus")
-	experimentDetails.TargetContainer = common.Getenv("TARGET_CONTAINER", "")
 	experimentDetails.AppNS = common.Getenv("APP_NAMESPACE", "")
 	experimentDetails.AppLabel = common.Getenv("APP_LABEL", "")
 	experimentDetails.AppKind = common.Getenv("APP_KIND", "")
 	experimentDetails.ChaosUID = clientTypes.UID(common.Getenv("CHAOS_UID", ""))
 	experimentDetails.InstanceID = common.Getenv("INSTANCE_ID", "")
-	experimentDetails.ChaosPodName = common.Getenv("POD_NAME", "")
 	experimentDetails.Delay, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_DELAY", "2"))
 	experimentDetails.Timeout, _ = strconv.Atoi(common.Getenv("STATUS_CHECK_TIMEOUT", "180"))
 	experimentDetails.AzureInstanceNames = common.Getenv("AZURE_INSTANCE_NAME", "")
@@ -36,18 +34,18 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.SubscriptionID = common.Getenv("SUBSCRIPTION_ID", "")
 	experimentDetails.ScaleSet = common.Getenv("SCALE_SET", "disable")
 	experimentDetails.Sequence = common.Getenv("SEQUENCE", "parallel")
-	experimentDetails.ExperimentType = common.Getenv("EXPERIMENT_TYPE", "cpu-hog")
+	experimentDetails.StreamPort = common.Getenv("STREAM_PORT", "")
+	experimentDetails.StreamType = common.Getenv("STREAM_TYPE", "upstream")
+	experimentDetails.ListenPort = common.Getenv("LISTEN_PORT", "20000")
+	experimentDetails.HttpChaosType = common.Getenv("HTTP_CHAOS_TYPE", "latency")
 	experimentDetails.InstallDependency = common.Getenv("INSTALL_DEPENDENCY", "True")
 	experimentDetails.OperatingSystem = common.Getenv("OPERATING_SYSTEM", "linux")
-	experimentDetails.CPUcores, _ = strconv.Atoi(common.Getenv("CPU_CORES", "1"))
-	experimentDetails.NumberOfWorkers, _ = strconv.Atoi(common.Getenv("NUMBER_OF_WORKERS", "1"))
-	experimentDetails.MemoryConsumption, _ = strconv.Atoi(common.Getenv("MEMORY_CONSUMPTION", "500"))
-	experimentDetails.FilesystemUtilizationBytes, _ = strconv.Atoi(common.Getenv("FILESYSTEM_UTILIZATION_BYTES", ""))
-	experimentDetails.FilesystemUtilizationPercentage, _ = strconv.Atoi(common.Getenv("FILESYSTEM_UTILIZATION_PERCENTAGE", "10"))
-	experimentDetails.VolumeMountPath = common.Getenv("VOLUME_MOUNT_PATH", "")
+	experimentDetails.Latency, _ = strconv.Atoi(common.Getenv("LATENCY", "2"))
+	experimentDetails.RateLimit, _ = strconv.Atoi(common.Getenv("RATE_LIMIT", ""))
+	experimentDetails.DataLimit, _ = strconv.Atoi(common.Getenv("DATA_LIMIT", ""))
+	experimentDetails.RequestTimeout, _ = strconv.Atoi(common.Getenv("REQUEST_TIMEOUT", ""))
 	experimentDetails.ScriptPath = common.Getenv("SCRIPT_PATH", "")
 	experimentDetails.AbortScriptPath = common.Getenv("ABORT_SCRIPT_PATH", "")
-
 }
 
 //InitialiseChaosVariables initialise all the global variables

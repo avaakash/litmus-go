@@ -13,7 +13,7 @@ spec:
       labels: 
         app: litmus-experiment
     spec:
-      serviceAccountName: azure-run-command-sa
+      serviceAccountName: azure-stress-chaos-sa
       containers:
       - name: gotest
         image: busybox 

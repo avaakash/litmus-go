@@ -1,4 +1,4 @@
-package azure
+package runcommand
 
 import (
 	"regexp"
@@ -44,7 +44,6 @@ func CheckRunCommandResultError(result *compute.RunCommandResult) error {
 
 	for ; i < len(message) && message[i] != "[stderr]"; i++ {
 	}
-
 	// errorCodes := make([][]int)
 	var errorCode []int
 	errorCode = nil
@@ -57,11 +56,8 @@ func CheckRunCommandResultError(result *compute.RunCommandResult) error {
 			break
 		}
 	}
-
 	if errorCode != nil {
 		return errors.Errorf("Script failed due to %v", message[errorCode[0]:])
 	}
-
 	return nil
-
 }

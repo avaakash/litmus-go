@@ -1,9 +1,9 @@
 package experiment
 
 import (
-	litmusLIB "github.com/litmuschaos/litmus-go/chaoslib/litmus/azure-run-command/lib"
-	experimentEnv "github.com/litmuschaos/litmus-go/pkg/azure/run-command/environment"
-	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/run-command/types"
+	litmusLIB "github.com/litmuschaos/litmus-go/chaoslib/litmus/azure-http-chaos/lib"
+	experimentEnv "github.com/litmuschaos/litmus-go/pkg/azure/http-chaos/environment"
+	experimentTypes "github.com/litmuschaos/litmus-go/pkg/azure/http-chaos/types"
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
 	azureCommon "github.com/litmuschaos/litmus-go/pkg/cloud/azure/common"
 
@@ -18,7 +18,7 @@ import (
 )
 
 // Experiment contains steps to inject chaos
-func AzureRunCommandExperiment(clients clients.ClientSets) {
+func AzureHttpChaosExperiment(clients clients.ClientSets) {
 
 	var err error
 	experimentsDetails := experimentTypes.ExperimentDetails{}
@@ -120,7 +120,7 @@ func AzureRunCommandExperiment(clients clients.ClientSets) {
 	// Including the litmus lib
 	switch experimentsDetails.ChaosLib {
 	case "litmus":
-		if err := litmusLIB.PrepareAzureRunCommandChaos(&experimentsDetails, clients, &resultDetails, &eventsDetails, &chaosDetails); err != nil {
+		if err := litmusLIB.PrepareAzureHttpChaos(&experimentsDetails, clients, &resultDetails, &eventsDetails, &chaosDetails); err != nil {
 			failStep := "failed in chaos injection phase"
 			result.RecordAfterFailure(&chaosDetails, &resultDetails, failStep, clients, &eventsDetails)
 			log.Errorf("Chaos injection failed, err: %v", err)

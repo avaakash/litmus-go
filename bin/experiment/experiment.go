@@ -14,8 +14,9 @@ import (
 	awsSSMChaosByID "github.com/litmuschaos/litmus-go/experiments/aws-ssm/aws-ssm-chaos-by-id/experiment"
 	awsSSMChaosByTag "github.com/litmuschaos/litmus-go/experiments/aws-ssm/aws-ssm-chaos-by-tag/experiment"
 	azureDiskLoss "github.com/litmuschaos/litmus-go/experiments/azure/azure-disk-loss/experiment"
+	azureHttpChaos "github.com/litmuschaos/litmus-go/experiments/azure/azure-http-chaos/experiment"
+	azureStressChaos "github.com/litmuschaos/litmus-go/experiments/azure/azure-stress-chaos/experiment"
 	azureInstanceStop "github.com/litmuschaos/litmus-go/experiments/azure/instance-stop/experiment"
-	azureRunCommand "github.com/litmuschaos/litmus-go/experiments/azure/run-command/experiment"
 	cassandraPodDelete "github.com/litmuschaos/litmus-go/experiments/cassandra/pod-delete/experiment"
 	gcpVMDiskLoss "github.com/litmuschaos/litmus-go/experiments/gcp/gcp-vm-disk-loss/experiment"
 	gcpVMInstanceStop "github.com/litmuschaos/litmus-go/experiments/gcp/gcp-vm-instance-stop/experiment"
@@ -152,8 +153,10 @@ func main() {
 		azureInstanceStop.AzureInstanceStop(clients)
 	case "azure-disk-loss":
 		azureDiskLoss.AzureDiskLoss(clients)
-	case "azure-run-command":
-		azureRunCommand.AzureRunCommandExperiment(clients)
+	case "azure-stress-chaos":
+		azureStressChaos.AzureStressChaosExperiment(clients)
+	case "azure-http-chaos":
+		azureHttpChaos.AzureHttpChaosExperiment(clients)
 	case "gcp-vm-disk-loss":
 		gcpVMDiskLoss.VMDiskLoss(clients)
 	case "pod-fio-stress":

@@ -1,0 +1,126 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litmus-experiment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litmus-experiment
+  template:
+    metadata:
+      labels: 
+        app: litmus-experiment
+    spec:
+      serviceAccountName: azure-http-chaos-sa
+      containers:
+      - name: gotest
+        image: busybox 
+        command: 
+          - sleep
+          - "3600"
+        env:
+          # provide application namespace
+          - name: APP_NAMESPACE
+            value: ''
+
+          # provide application labels
+          - name: APP_LABEL
+            value: ''
+ 
+          # provide application kind
+          - name: APP_KIND
+            value: '' 
+
+          - name: TOTAL_CHAOS_DURATION
+            value: ''
+
+          # provide auxiliary application details - namespace and labels of the applications
+          # sample input is - "ns1:app=percona,ns2:name=nginx"
+          - name: AUXILIARY_APPINFO
+            value: ''
+          
+          ## Period to wait before injection of chaos in sec
+          - name: RAMP_TIME
+            value: ''
+
+          ## env var that describes the library used to execute the chaos
+          ## default: litmus. Supported values: litmus, powerfulseal, chaoskube
+          - name: LIB
+            value: ''
+
+          # provide the chaos namespace
+          - name: CHAOS_NAMESPACE
+            value: ''
+          
+          # provide the chaos namespace
+          - name: AZURE_INSTANCE_NAME
+            value: ''
+          
+          # provide the chaos namespace
+          - name: RESOURCE_GROUP
+            value: ''
+          
+          # provide the chaos namespace
+          - name: SCALESET
+            value: ''
+          
+          # provide the chaos namespace
+          - name: SEQUENCE
+            value: ''
+          
+          # provide the chaos namespace
+          - name: HTTP_CHAOS_TYPE
+            value: ''
+          
+          # provide the chaos namespace
+          - name: INSTALL_DEPENDANCY
+            value: ''
+          
+          # provide the chaos namespace
+          - name: OPERATING_SYSTEM
+            value: ''
+          
+          # provide the chaos namespace
+          - name: STREAM_PORT
+            value: ''
+          
+          # provide the chaos namespace
+          - name: STREAM_TYPE
+            value: ''
+          
+          # provide the chaos namespace
+          - name: LISTEN_PORT
+            value: ''
+          
+          # provide the chaos namespace
+          - name: LATENCY
+            value: ''
+          
+          # provide the chaos namespace
+          - name: RATE_LIMIT
+            value: ''
+          
+          # provide the chaos namespace
+          - name: DATA_LIMIT
+            value: ''
+          
+          # provide the chaos namespace
+          - name: REQUEST_TIMEOUT
+            value: ''
+          
+          # provide the chaos namespace
+          - name: SCRIPT_PATH
+            value: ''
+          
+          # provide the chaos namespace
+          - name: ABORT_SCRIPT_PATH
+            value: ''
+          
+        
+          - name: CHAOS_SERVICE_ACCOUNT
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.serviceAccountName
+
