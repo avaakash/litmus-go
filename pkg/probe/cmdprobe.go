@@ -136,7 +136,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 		return errors.Errorf("unable to get the serviceAccountName, err: %v", err)
 	}
 
-	expEnv := getEnvFromExperiment(clients, chaosDetails.AppDetail.Namespace, chaosDetails.ExperimentName)
+	expEnv := getEnvFromExperiment(clients, chaosDetails.AppDetail.Namespace, chaosDetails.ChaosPodName)
 
 	cmdProbe := &apiv1.Pod{
 		ObjectMeta: v1.ObjectMeta{
@@ -174,9 +174,10 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 	return err
 }
 
-func getEnvFromExperiment(clients clients.ClientSets, appNs, expName string) []apiv1.EnvVar {
-	expPod, err := clients.KubeClient.CoreV1().Pods(appNs).Get(context.Background(), expName, v1.GetOptions{})
+func getEnvFromExperiment(clients clients.ClientSets, appNs, podName string) []apiv1.EnvVar {
+	expPod, err := clients.KubeClient.CoreV1().Pods(appNs).Get(context.Background(), podName, v1.GetOptions{})
 	if err != nil {
+		log.Errorf("Unable to get the experiment pod, err: %v", err)
 		return nil
 	}
 	return expPod.Spec.Containers[0].Env
