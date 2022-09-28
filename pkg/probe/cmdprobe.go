@@ -135,6 +135,9 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 	if err != nil {
 		return errors.Errorf("unable to get the serviceAccountName, err: %v", err)
 	}
+
+	expEnv := getEnvFromExperiment(clients, chaosDetails.AppDetail.Namespace, chaosDetails.ExperimentName)
+
 	cmdProbe := &apiv1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name:        chaosDetails.ExperimentName + "-probe-" + runID,
@@ -157,7 +160,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 					Command:         getProbeCmd(source.Command),
 					Args:            getProbeArgs(source.Args),
 					Resources:       chaosDetails.Resources,
-					Env:             source.ENVList,
+					Env:             expEnv,
 					SecurityContext: &apiv1.SecurityContext{
 						Privileged: &source.Privileged,
 					},
@@ -169,6 +172,14 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 
 	_, err = clients.KubeClient.CoreV1().Pods(chaosDetails.ChaosNamespace).Create(context.Background(), cmdProbe, v1.CreateOptions{})
 	return err
+}
+
+func getEnvFromExperiment(clients clients.ClientSets, appNs, expName string) []apiv1.EnvVar {
+	expPod, err := clients.KubeClient.CoreV1().Pods(appNs).Get(context.Background(), expName, v1.GetOptions{})
+	if err != nil {
+		return nil
+	}
+	return expPod.Spec.Containers[0].Env
 }
 
 // getProbeLabels adding provided labels to probePod
@@ -209,7 +220,7 @@ func getProbeCmd(sourceCmd []string) []string {
 	return sourceCmd
 }
 
-//deleteProbePod deletes the probe pod and wait until it got terminated
+// deleteProbePod deletes the probe pod and wait until it got terminated
 func deleteProbePod(chaosDetails *types.ChaosDetails, clients clients.ClientSets, runID string) error {
 
 	if err := clients.KubeClient.CoreV1().Pods(chaosDetails.ChaosNamespace).Delete(context.Background(), chaosDetails.ExperimentName+"-probe-"+runID, v1.DeleteOptions{}); err != nil {
@@ -449,7 +460,7 @@ func validateResult(comparator v1alpha1.ComparatorInfo, cmdOutput string, rc int
 	return nil
 }
 
-//preChaosCmdProbe trigger the cmd probe for prechaos phase
+// preChaosCmdProbe trigger the cmd probe for prechaos phase
 func preChaosCmdProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
 
 	switch probe.Mode {
@@ -535,7 +546,7 @@ func preChaosCmdProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.Resul
 	return nil
 }
 
-//postChaosCmdProbe trigger cmd probe for post chaos phase
+// postChaosCmdProbe trigger cmd probe for post chaos phase
 func postChaosCmdProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
 
 	switch probe.Mode {
@@ -619,7 +630,7 @@ func postChaosCmdProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.Resu
 	return nil
 }
 
-//onChaosCmdProbe trigger the cmd probe for DuringChaos phase
+// onChaosCmdProbe trigger the cmd probe for DuringChaos phase
 func onChaosCmdProbe(probe v1alpha1.ProbeAttributes, resultDetails *types.ResultDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
 
 	switch probe.Mode {
