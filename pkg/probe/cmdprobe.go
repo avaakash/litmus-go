@@ -136,7 +136,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 		return errors.Errorf("unable to get the serviceAccountName, err: %v", err)
 	}
 
-	expEnv, expVolumeMount := getEnvAndVolumeMountFromExperiment(clients, chaosDetails.ChaosNamespace, chaosDetails.ChaosPodName)
+	expEnv, expVolumeMount := getEnvAndVolumeMountFromExperiment(clients, chaosDetails.ChaosNamespace, chaosDetails.ChaosPodName, source.VolumesMount)
 
 	expEnv = append(expEnv, source.ENVList...)
 	expVolumeMount = append(expVolumeMount, source.VolumesMount...)
@@ -177,7 +177,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 	return err
 }
 
-func getEnvAndVolumeMountFromExperiment(clients clients.ClientSets, chaosNamespace, podName string) ([]apiv1.EnvVar, []apiv1.VolumeMount) {
+func getEnvAndVolumeMountFromExperiment(clients clients.ClientSets, chaosNamespace, podName string, sourceVolumeMount []apiv1.VolumeMount) ([]apiv1.EnvVar, []apiv1.VolumeMount) {
 	expPod, err := clients.KubeClient.CoreV1().Pods(chaosNamespace).Get(context.Background(), podName, v1.GetOptions{})
 	if err != nil {
 		log.Errorf("Unable to get the experiment pod, err: %v", err)
@@ -188,10 +188,28 @@ func getEnvAndVolumeMountFromExperiment(clients clients.ClientSets, chaosNamespa
 
 	for _, container := range expPod.Spec.Containers {
 		envVarList = append(envVarList, container.Env...)
-		volumeMountList = append(volumeMountList, container.VolumeMounts...)
+		volumeMountList = append(volumeMountList, getUniqueVolumeMount(container.VolumeMounts, sourceVolumeMount)...)
 	}
 
 	return envVarList, volumeMountList
+}
+
+func getUniqueVolumeMount(volumeMountList, sourceVolumeMount []apiv1.VolumeMount) []apiv1.VolumeMount {
+	for _, volumeMount := range volumeMountList {
+		flagFound := false
+
+		for _, sourceVolume := range sourceVolumeMount {
+			if volumeMount.Name == sourceVolume.Name || volumeMount.MountPath == sourceVolume.MountPath {
+				flagFound = true
+				break
+			}
+		}
+
+		if !flagFound {
+			volumeMountList = append(volumeMountList, volumeMount)
+		}
+	}
+	return volumeMountList
 }
 
 // getProbeLabels adding provided labels to probePod
