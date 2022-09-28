@@ -188,28 +188,14 @@ func getEnvAndVolumeMountFromExperiment(clients clients.ClientSets, chaosNamespa
 
 	for _, container := range expPod.Spec.Containers {
 		envVarList = append(envVarList, container.Env...)
-		volumeMountList = append(volumeMountList, getUniqueVolumeMount(container.VolumeMounts, sourceVolumeMount)...)
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name == "cloud-secret" {
+				volumeMountList = append(volumeMountList, volumeMount)
+			}
+		}
 	}
 
 	return envVarList, volumeMountList
-}
-
-func getUniqueVolumeMount(volumeMountList, sourceVolumeMount []apiv1.VolumeMount) []apiv1.VolumeMount {
-	for _, volumeMount := range volumeMountList {
-		flagFound := false
-
-		for _, sourceVolume := range sourceVolumeMount {
-			if volumeMount.Name == sourceVolume.Name || volumeMount.MountPath == sourceVolume.MountPath {
-				flagFound = true
-				break
-			}
-		}
-
-		if !flagFound {
-			volumeMountList = append(volumeMountList, volumeMount)
-		}
-	}
-	return volumeMountList
 }
 
 // getProbeLabels adding provided labels to probePod
