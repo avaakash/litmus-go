@@ -136,7 +136,10 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 		return errors.Errorf("unable to get the serviceAccountName, err: %v", err)
 	}
 
-	expEnv := getEnvFromExperiment(clients, chaosDetails.ChaosNamespace, chaosDetails.ChaosPodName)
+	expEnv, expVolumeMount := getEnvAndVolumeMountFromExperiment(clients, chaosDetails.ChaosNamespace, chaosDetails.ChaosPodName)
+
+	expEnv = append(expEnv, source.ENVList...)
+	expVolumeMount = append(expVolumeMount, source.VolumesMount...)
 
 	cmdProbe := &apiv1.Pod{
 		ObjectMeta: v1.ObjectMeta{
@@ -164,7 +167,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 					SecurityContext: &apiv1.SecurityContext{
 						Privileged: &source.Privileged,
 					},
-					VolumeMounts: source.VolumesMount,
+					VolumeMounts: expVolumeMount,
 				},
 			},
 		},
@@ -174,13 +177,21 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 	return err
 }
 
-func getEnvFromExperiment(clients clients.ClientSets, chaosNamespace, podName string) []apiv1.EnvVar {
+func getEnvAndVolumeMountFromExperiment(clients clients.ClientSets, chaosNamespace, podName string) ([]apiv1.EnvVar, []apiv1.VolumeMount) {
 	expPod, err := clients.KubeClient.CoreV1().Pods(chaosNamespace).Get(context.Background(), podName, v1.GetOptions{})
 	if err != nil {
 		log.Errorf("Unable to get the experiment pod, err: %v", err)
-		return nil
+		return nil, nil
 	}
-	return expPod.Spec.Containers[0].Env
+	envVarList := make([]apiv1.EnvVar, 0)
+	volumeMountList := make([]apiv1.VolumeMount, 0)
+
+	for _, container := range expPod.Spec.Containers {
+		envVarList = append(envVarList, container.Env...)
+		volumeMountList = append(volumeMountList, container.VolumeMounts...)
+	}
+
+	return envVarList, volumeMountList
 }
 
 // getProbeLabels adding provided labels to probePod
