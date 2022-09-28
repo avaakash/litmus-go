@@ -141,6 +141,7 @@ func createProbePod(clients clients.ClientSets, chaosDetails *types.ChaosDetails
 	expEnv = append(expEnv, source.ENVList...)
 	expVolumeMount = append(expVolumeMount, source.VolumesMount...)
 
+	fmt.Print(expVolumeMount)
 	cmdProbe := &apiv1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name:        chaosDetails.ExperimentName + "-probe-" + runID,
