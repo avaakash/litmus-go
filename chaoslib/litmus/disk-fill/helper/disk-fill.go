@@ -78,7 +78,7 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 	}
 
 	// derive the used ephemeral storage size from the target container
-	du := fmt.Sprintf("nsenter -t %v -n sudo du", targetPID)
+	du := fmt.Sprintf("nsenter -t %v -n sudo du /", targetPID)
 	cmd := exec.Command("/bin/bash", "-c", du)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
