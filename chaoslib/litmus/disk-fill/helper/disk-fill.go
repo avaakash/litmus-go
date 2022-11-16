@@ -85,7 +85,6 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 		log.Error(string(out))
 		return err
 	}
-	log.Info(string(out))
 	ephemeralStorageDetails := string(out)
 
 	// filtering out the used ephemeral storage from the output of du command
