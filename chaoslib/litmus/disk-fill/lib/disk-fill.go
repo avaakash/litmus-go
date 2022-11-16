@@ -67,7 +67,7 @@ func PrepareDiskFill(experimentsDetails *experimentTypes.ExperimentDetails, clie
 	for _, pod := range targetPodList.Items {
 		podNames = append(podNames, pod.Name)
 	}
-	log.Infof("Target pods list for chaos, %v", podNames)
+	log.Infof("Target pods list for chaos: %v", podNames)
 
 	//Waiting for the ramp time before chaos injection
 	if experimentsDetails.RampTime != 0 {
