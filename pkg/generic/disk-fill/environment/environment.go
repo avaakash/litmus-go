@@ -9,7 +9,7 @@ import (
 	"github.com/litmuschaos/litmus-go/pkg/types"
 )
 
-//GetENV fetches all the env variables from the runner pod
+// GetENV fetches all the env variables from the runner pod
 func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ExperimentName = types.Getenv("EXPERIMENT_NAME", "disk-fill")
 	experimentDetails.ChaosNamespace = types.Getenv("CHAOS_NAMESPACE", "litmus")
@@ -25,7 +25,8 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ChaosPodName = types.Getenv("POD_NAME", "")
 	experimentDetails.AuxiliaryAppInfo = types.Getenv("AUXILIARY_APPINFO", "")
 	experimentDetails.TargetContainer = types.Getenv("TARGET_CONTAINER", "")
-	experimentDetails.ContainerPath = types.Getenv("CONTAINER_PATH", "/var/lib/docker/containers")
+	experimentDetails.ContainerRuntime = types.Getenv("CONTAINER_RUNTIME", "docker")
+	experimentDetails.SocketPath = types.Getenv("SOCKET_PATH", "/var/lib/docker")
 	experimentDetails.FillPercentage = types.Getenv("FILL_PERCENTAGE", "80")
 	experimentDetails.Delay, _ = strconv.Atoi(types.Getenv("STATUS_CHECK_DELAY", "2"))
 	experimentDetails.Timeout, _ = strconv.Atoi(types.Getenv("STATUS_CHECK_TIMEOUT", "180"))

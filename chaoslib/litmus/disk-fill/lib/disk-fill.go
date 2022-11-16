@@ -19,7 +19,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//PrepareDiskFill contains the prepration steps before chaos injection
+// PrepareDiskFill contains the prepration steps before chaos injection
 func PrepareDiskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	targetPodList := apiv1.PodList{}
@@ -227,7 +227,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 // createHelperPod derive the attributes for helper pod and create the helper pod
 func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails, appName, appNodeName, runID, labelSuffix string) error {
 
-	mountPropagationMode := apiv1.MountPropagationHostToContainer
+	privilegedEnable := true
 	terminationGracePeriodSeconds := int64(experimentsDetails.TerminationGracePeriodSeconds)
 
 	helperPod := &apiv1.Pod{
@@ -238,17 +238,27 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 			Annotations: chaosDetails.Annotations,
 		},
 		Spec: apiv1.PodSpec{
+			HostPID:                       true,
 			RestartPolicy:                 apiv1.RestartPolicyNever,
 			ImagePullSecrets:              chaosDetails.ImagePullSecrets,
 			NodeName:                      appNodeName,
 			ServiceAccountName:            experimentsDetails.ChaosServiceAccount,
 			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+
 			Volumes: []apiv1.Volume{
 				{
-					Name: "udev",
+					Name: "socket-path",
 					VolumeSource: apiv1.VolumeSource{
 						HostPath: &apiv1.HostPathVolumeSource{
-							Path: experimentsDetails.ContainerPath,
+							Path: experimentsDetails.SocketPath,
+						},
+					},
+				},
+				{
+					Name: "sys-path",
+					VolumeSource: apiv1.VolumeSource{
+						HostPath: &apiv1.HostPathVolumeSource{
+							Path: "/sys",
 						},
 					},
 				},
@@ -269,9 +279,21 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 					Env:       getPodEnv(experimentsDetails, appName),
 					VolumeMounts: []apiv1.VolumeMount{
 						{
-							Name:             "udev",
-							MountPath:        "/diskfill",
-							MountPropagation: &mountPropagationMode,
+							Name:      "socket-path",
+							MountPath: experimentsDetails.SocketPath,
+						},
+						{
+							Name:      "sys-path",
+							MountPath: "/sys",
+						},
+					},
+					SecurityContext: &apiv1.SecurityContext{
+						Privileged: &privilegedEnable,
+						RunAsUser:  ptrint64(0),
+						Capabilities: &apiv1.Capabilities{
+							Add: []apiv1.Capability{
+								"SYS_ADMIN",
+							},
 						},
 					},
 				},
@@ -281,6 +303,10 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 
 	_, err := clients.KubeClient.CoreV1().Pods(experimentsDetails.ChaosNamespace).Create(context.Background(), helperPod, v1.CreateOptions{})
 	return err
+}
+
+func ptrint64(p int64) *int64 {
+	return &p
 }
 
 // getPodEnv derive all the env required for the helper pod
@@ -299,13 +325,15 @@ func getPodEnv(experimentsDetails *experimentTypes.ExperimentDetails, podName st
 		SetEnv("EPHEMERAL_STORAGE_MEBIBYTES", experimentsDetails.EphemeralStorageMebibytes).
 		SetEnv("DATA_BLOCK_SIZE", strconv.Itoa(experimentsDetails.DataBlockSize)).
 		SetEnv("INSTANCE_ID", experimentsDetails.InstanceID).
+		SetEnv("SOCKET_PATH", experimentsDetails.SocketPath).
+		SetEnv("CONTAINER_RUNTIME", experimentsDetails.ContainerRuntime).
 		SetEnvFromDownwardAPI("v1", "metadata.name")
 
 	return envDetails.ENV
 }
 
-//setChaosTunables will setup a random value within a given range of values
-//If the value is not provided in range it'll setup the initial provided value.
+// setChaosTunables will setup a random value within a given range of values
+// If the value is not provided in range it'll setup the initial provided value.
 func setChaosTunables(experimentsDetails *experimentTypes.ExperimentDetails) {
 	experimentsDetails.FillPercentage = common.ValidateRange(experimentsDetails.FillPercentage)
 	experimentsDetails.EphemeralStorageMebibytes = common.ValidateRange(experimentsDetails.EphemeralStorageMebibytes)

@@ -63,7 +63,7 @@ func Helper(clients clients.ClientSets) {
 	}
 }
 
-//diskFill contains steps to inject disk-fill chaos
+// diskFill contains steps to inject disk-fill chaos
 func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails, resultDetails *types.ResultDetails) error {
 
 	// Derive the container id of the target container
@@ -71,9 +71,14 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 	if err != nil {
 		return err
 	}
+	// extract out the pid of the target container
+	targetPID, err := common.GetPID(experimentsDetails.ContainerRuntime, containerID, experimentsDetails.SocketPath)
+	if err != nil {
+		return err
+	}
 
 	// derive the used ephemeral storage size from the target container
-	du := fmt.Sprintf("sudo du /diskfill/%v", containerID)
+	du := fmt.Sprintf("nsenter %v -p -- sudo du /diskfill", targetPID)
 	cmd := exec.Command("/bin/bash", "-c", du)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -119,11 +124,11 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 	}
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, clients, containerID, resultDetails.Name)
+	go abortWatcher(experimentsDetails, clients, targetPID, resultDetails.Name)
 
 	if sizeTobeFilled > 0 {
 
-		if err := fillDisk(containerID, sizeTobeFilled, experimentsDetails.DataBlockSize); err != nil {
+		if err := fillDisk(targetPID, sizeTobeFilled, experimentsDetails.DataBlockSize); err != nil {
 			log.Error(string(out))
 			return err
 		}
@@ -140,7 +145,7 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 
 		// It will delete the target pod if target pod is evicted
 		// if target pod is still running then it will delete all the files, which was created earlier during chaos execution
-		err = remedy(experimentsDetails, clients, containerID)
+		err = revertDiskFill(experimentsDetails, clients, targetPID)
 		if err != nil {
 			return errors.Errorf("unable to perform remedy operation, err: %v", err)
 		}
@@ -154,7 +159,7 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 }
 
 // fillDisk fill the ephemeral disk by creating files
-func fillDisk(containerID string, sizeTobeFilled, bs int) error {
+func fillDisk(targetPID, sizeTobeFilled, bs int) error {
 
 	select {
 	case <-inject:
@@ -163,7 +168,7 @@ func fillDisk(containerID string, sizeTobeFilled, bs int) error {
 	default:
 		// Creating files to fill the required ephemeral storage size of block size of 4K
 		log.Infof("[Fill]: Filling ephemeral storage, size: %vKB", sizeTobeFilled)
-		dd := fmt.Sprintf("sudo dd if=/dev/urandom of=/diskfill/%v/diskfill bs=%vK count=%v", containerID, bs, strconv.Itoa(sizeTobeFilled/bs))
+		dd := fmt.Sprintf("nsenter %v -p -- sudo dd if=/dev/urandom of=/diskfill bs=%vK count=%v", targetPID, bs, strconv.Itoa(sizeTobeFilled/bs))
 		log.Infof("dd: {%v}", dd)
 		cmd := exec.Command("/bin/bash", "-c", dd)
 		_, err := cmd.CombinedOutput()
@@ -226,23 +231,23 @@ func getSizeToBeFilled(experimentsDetails *experimentTypes.ExperimentDetails, us
 	return needToBeFilled
 }
 
-// remedy will delete the target pod if target pod is evicted
+// revertDiskFill will delete the target pod if target pod is evicted
 // if target pod is still running then it will delete the files, which was created during chaos execution
-func remedy(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, containerID string) error {
+func revertDiskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, targetPID int) error {
 	pod, err := clients.KubeClient.CoreV1().Pods(experimentsDetails.AppNS).Get(context.Background(), experimentsDetails.TargetPods, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	// Deleting the pod as pod is already evicted
 	podReason := pod.Status.Reason
 	if podReason == "Evicted" {
+		// Deleting the pod as pod is already evicted
 		log.Warn("Target pod is evicted, deleting the pod")
 		if err := clients.KubeClient.CoreV1().Pods(experimentsDetails.AppNS).Delete(context.Background(), experimentsDetails.TargetPods, v1.DeleteOptions{}); err != nil {
 			return err
 		}
 	} else {
 		// deleting the files after chaos execution
-		rm := fmt.Sprintf("sudo rm -rf /diskfill/%v/diskfill", containerID)
+		rm := fmt.Sprintf("nsenter %v -p -- sudo rm -rf /diskfill", targetPID)
 		cmd := exec.Command("/bin/bash", "-c", rm)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -253,7 +258,7 @@ func remedy(experimentsDetails *experimentTypes.ExperimentDetails, clients clien
 	return nil
 }
 
-//getENV fetches all the env variables from the runner pod
+// getENV fetches all the env variables from the runner pod
 func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ExperimentName = types.Getenv("EXPERIMENT_NAME", "")
 	experimentDetails.InstanceID = types.Getenv("INSTANCE_ID", "")
@@ -268,10 +273,12 @@ func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.FillPercentage = types.Getenv("FILL_PERCENTAGE", "")
 	experimentDetails.EphemeralStorageMebibytes = types.Getenv("EPHEMERAL_STORAGE_MEBIBYTES", "")
 	experimentDetails.DataBlockSize, _ = strconv.Atoi(types.Getenv("DATA_BLOCK_SIZE", "256"))
+	experimentDetails.ContainerRuntime = types.Getenv("CONTAINER_RUNTIME", "")
+	experimentDetails.SocketPath = types.Getenv("SOCKET_PATH", "")
 }
 
 // abortWatcher continuously watch for the abort signals
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, containerID, resultName string) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, targetPID int, resultName string) {
 	// waiting till the abort signal received
 	<-abort
 
@@ -280,7 +287,7 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients
 	// retry thrice for the chaos revert
 	retry := 3
 	for retry > 0 {
-		if err := remedy(experimentsDetails, clients, containerID); err != nil {
+		if err := revertDiskFill(experimentsDetails, clients, targetPID); err != nil {
 			log.Errorf("unable to perform remedy operation, err: %v", err)
 		}
 		retry--

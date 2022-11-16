@@ -21,7 +21,8 @@ type ExperimentDetails struct {
 	TargetContainer               string
 	AuxiliaryAppInfo              string
 	FillPercentage                string
-	ContainerPath                 string
+	ContainerRuntime              string
+	SocketPath                    string
 	RunID                         string
 	Timeout                       int
 	Delay                         int
