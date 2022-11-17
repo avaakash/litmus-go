@@ -167,8 +167,9 @@ func fillDisk(targetPID, sizeTobeFilled, bs int) error {
 		os.Exit(1)
 	default:
 		// Creating files to fill the required ephemeral storage size of block size of 4K
+		// 7691
 		log.Infof("[Fill]: Filling ephemeral storage, size: %vKB", sizeTobeFilled)
-		dd := fmt.Sprintf("nsenter -t %v -n sudo mkdir diskfill && sudo dd if=/dev/urandom of=/diskfill bs=%vK count=%v", targetPID, bs, strconv.Itoa(sizeTobeFilled/bs))
+		dd := fmt.Sprintf("sudo nsenter -t %v -n dd if=/dev/urandom of=/diskfill bs=%vK count=%v", targetPID, bs, strconv.Itoa(sizeTobeFilled/bs))
 		log.Infof("dd: {%v}", dd)
 		cmd := exec.Command("/bin/bash", "-c", dd)
 		_, err := cmd.CombinedOutput()
