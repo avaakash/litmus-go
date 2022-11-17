@@ -78,7 +78,7 @@ func diskFill(experimentsDetails *experimentTypes.ExperimentDetails, clients cli
 	}
 
 	// derive the used ephemeral storage size from the target container
-	du := fmt.Sprintf("nsenter -t %v -p sudo du /proc/%v/root", targetPID, targetPID)
+	du := fmt.Sprintf("sudo du /proc/%v/root", targetPID)
 	cmd := exec.Command("/bin/bash", "-c", du)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -169,8 +169,8 @@ func fillDisk(targetPID, sizeTobeFilled, bs int) error {
 		// Creating files to fill the required ephemeral storage size of block size of 4K
 		// 7691
 		log.Infof("[Fill]: Filling ephemeral storage, size: %vKB", sizeTobeFilled)
-		dd := fmt.Sprintf("sudo nsenter -t %v -p dd if=/dev/urandom of=/proc/%v/root/home/diskfill bs=%vK count=%v", targetPID, targetPID, bs, strconv.Itoa(sizeTobeFilled/bs))
-		log.Infof("dd: {%v}", dd)
+		dd := fmt.Sprintf("sudo dd if=/dev/urandom of=/proc/%v/root/home/diskfill bs=%vK count=%v", targetPID, bs, strconv.Itoa(sizeTobeFilled/bs))
+		log.Infof("Executing dd command: {%v}", dd)
 		cmd := exec.Command("/bin/bash", "-c", dd)
 		_, err := cmd.CombinedOutput()
 		return err
@@ -248,7 +248,7 @@ func revertDiskFill(experimentsDetails *experimentTypes.ExperimentDetails, clien
 		}
 	} else {
 		// deleting the files after chaos execution
-		rm := fmt.Sprintf("nsenter -t %v -p sudo rm -rf /proc/%v/root/home/diskfill", targetPID, targetPID)
+		rm := fmt.Sprintf("sudo rm -rf /proc/%v/root/home/diskfill", targetPID)
 		cmd := exec.Command("/bin/bash", "-c", rm)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
