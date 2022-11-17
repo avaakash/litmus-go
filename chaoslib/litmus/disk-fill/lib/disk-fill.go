@@ -274,10 +274,6 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 							Name:      "socket-path",
 							MountPath: experimentsDetails.SocketPath,
 						},
-						{
-							Name:      "sys-path",
-							MountPath: "/sys",
-						},
 					},
 					SecurityContext: &apiv1.SecurityContext{
 						Privileged: &privilegedEnable,
