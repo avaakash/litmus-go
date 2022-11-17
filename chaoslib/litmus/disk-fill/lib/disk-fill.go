@@ -254,14 +254,6 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 						},
 					},
 				},
-				{
-					Name: "sys-path",
-					VolumeSource: apiv1.VolumeSource{
-						HostPath: &apiv1.HostPathVolumeSource{
-							Path: "/sys",
-						},
-					},
-				},
 			},
 			Containers: []apiv1.Container{
 				{
@@ -289,12 +281,6 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 					},
 					SecurityContext: &apiv1.SecurityContext{
 						Privileged: &privilegedEnable,
-						RunAsUser:  ptrint64(0),
-						Capabilities: &apiv1.Capabilities{
-							Add: []apiv1.Capability{
-								"SYS_ADMIN",
-							},
-						},
 					},
 				},
 			},
@@ -303,10 +289,6 @@ func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clie
 
 	_, err := clients.KubeClient.CoreV1().Pods(experimentsDetails.ChaosNamespace).Create(context.Background(), helperPod, v1.CreateOptions{})
 	return err
-}
-
-func ptrint64(p int64) *int64 {
-	return &p
 }
 
 // getPodEnv derive all the env required for the helper pod
