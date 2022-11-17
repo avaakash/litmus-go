@@ -227,7 +227,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 // createHelperPod derive the attributes for helper pod and create the helper pod
 func createHelperPod(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails, appName, appNodeName, runID, labelSuffix string) error {
 
-	privilegedEnable := true
+	privilegedEnable := false
 	terminationGracePeriodSeconds := int64(experimentsDetails.TerminationGracePeriodSeconds)
 
 	helperPod := &apiv1.Pod{
