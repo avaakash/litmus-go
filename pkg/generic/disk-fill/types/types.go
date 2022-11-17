@@ -19,7 +19,6 @@ type ExperimentDetails struct {
 	ChaosNamespace                string
 	ChaosPodName                  string
 	TargetContainer               string
-	AuxiliaryAppInfo              string
 	FillPercentage                string
 	ContainerRuntime              string
 	SocketPath                    string
