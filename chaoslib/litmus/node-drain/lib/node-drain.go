@@ -16,6 +16,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/generic/node-drain/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/status"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
@@ -30,7 +31,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareNodeDrain contains the prepration steps before chaos injection
+// PrepareNodeDrain contains the prepration steps before chaos injection
 func PrepareNodeDrain(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -71,7 +72,7 @@ func PrepareNodeDrain(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	}
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, clients, resultDetails, chaosDetails, eventsDetails)
+	go abortWatcher(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	// Drain the application node
 	if err := drainNode(experimentsDetails, clients, chaosDetails); err != nil {
@@ -82,7 +83,7 @@ func PrepareNodeDrain(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	log.Info("[Status]: Verify the status of AUT after reschedule")
 	if err = status.CheckApplicationStatus(experimentsDetails.AppNS, experimentsDetails.AppLabel, experimentsDetails.Timeout, experimentsDetails.Delay, clients); err != nil {
 		log.Info("[Revert]: Reverting chaos because application status check failed")
-		if uncordonErr := uncordonNode(experimentsDetails, clients, chaosDetails); uncordonErr != nil {
+		if uncordonErr := uncordonNode(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace); uncordonErr != nil {
 			log.Errorf("Unable to uncordon the node, err: %v", uncordonErr)
 		}
 		return errors.Errorf("application status check failed, err: %v", err)
@@ -93,7 +94,7 @@ func PrepareNodeDrain(experimentsDetails *experimentTypes.ExperimentDetails, cli
 		log.Info("[Status]: Verify that the Auxiliary Applications are running")
 		if err = status.CheckAuxiliaryApplicationStatus(experimentsDetails.AuxiliaryAppInfo, experimentsDetails.Timeout, experimentsDetails.Delay, clients); err != nil {
 			log.Info("[Revert]: Reverting chaos because auxiliary application status check failed")
-			if uncordonErr := uncordonNode(experimentsDetails, clients, chaosDetails); uncordonErr != nil {
+			if uncordonErr := uncordonNode(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace); uncordonErr != nil {
 				log.Errorf("Unable to uncordon the node, err: %v", uncordonErr)
 			}
 			return errors.Errorf("auxiliary Applications status check failed, err: %v", err)
@@ -107,7 +108,7 @@ func PrepareNodeDrain(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	log.Info("[Chaos]: Stopping the experiment")
 
 	// Uncordon the application node
-	if err := uncordonNode(experimentsDetails, clients, chaosDetails); err != nil {
+	if err := uncordonNode(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace); err != nil {
 		return err
 	}
 
@@ -158,7 +159,7 @@ func drainNode(experimentsDetails *experimentTypes.ExperimentDetails, clients cl
 }
 
 // uncordonNode uncordon the application node
-func uncordonNode(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
+func uncordonNode(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultName, chaosNS string) error {
 
 	targetNodes := strings.Split(experimentsDetails.TargetNode, ",")
 	for _, targetNode := range targetNodes {
@@ -168,7 +169,9 @@ func uncordonNode(experimentsDetails *experimentTypes.ExperimentDetails, clients
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				log.Infof("[Info]: The %v node is no longer exist, skip uncordon the node", targetNode)
-				common.SetTargets(targetNode, "noLongerExist", "node", chaosDetails)
+				if err = result.AnnotateChaosResult(resultName, chaosNS, "noLongerExist", "node", targetNode); err != nil {
+					log.Errorf("unable to annotate the chaosresult, err :%v", err)
+				}
 				continue
 			} else {
 				return errors.Errorf("unable to get the %v node, err: %v", targetNode, err)
@@ -184,7 +187,9 @@ func uncordonNode(experimentsDetails *experimentTypes.ExperimentDetails, clients
 			log.Infof("Error String: %v", stderr.String())
 			return errors.Errorf("unable to uncordon the %v node, err: %v", targetNode, err)
 		}
-		common.SetTargets(targetNode, "reverted", "node", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "node", targetNode); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 
 	return retry.
@@ -210,7 +215,7 @@ func uncordonNode(experimentsDetails *experimentTypes.ExperimentDetails, clients
 }
 
 // abortWatcher continuously watch for the abort signals
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, chaosDetails *types.ChaosDetails, eventsDetails *types.EventDetails) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultName, chaosNS string) {
 	// waiting till the abort signal received
 	<-abort
 
@@ -219,7 +224,7 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients
 	// retry thrice for the chaos revert
 	retry := 3
 	for retry > 0 {
-		if err := uncordonNode(experimentsDetails, clients, chaosDetails); err != nil {
+		if err := uncordonNode(experimentsDetails, clients, resultName, chaosNS); err != nil {
 			log.Errorf("Unable to uncordon the node, err: %v", err)
 		}
 		retry--

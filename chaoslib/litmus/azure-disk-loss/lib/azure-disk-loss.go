@@ -15,6 +15,7 @@ import (
 	"github.com/litmuschaos/litmus-go/pkg/events"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/litmuschaos/litmus-go/pkg/utils/retry"
@@ -26,7 +27,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareChaos contains the prepration and injection steps for the experiment
+// PrepareChaos contains the prepration and injection steps for the experiment
 func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -73,7 +74,7 @@ func PrepareChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients
 	default:
 
 		// watching for the abort signal and revert the chaos
-		go abortWatcher(experimentsDetails, attachedDisksWithInstance, instanceNamesWithDiskNames, chaosDetails)
+		go abortWatcher(experimentsDetails, attachedDisksWithInstance, instanceNamesWithDiskNames, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":
@@ -175,7 +176,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 	return nil
 }
 
-//injectChaosInSerialMode will inject the azure disk loss chaos in serial mode that is one after other
+// injectChaosInSerialMode will inject the azure disk loss chaos in serial mode that is one after other
 func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesWithDiskNames map[string][]string, attachedDisksWithInstance map[string]*[]compute.DataDisk, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	//ChaosStartTimeStamp contains the start timestamp, when the chaos injection begin
@@ -242,7 +243,7 @@ func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 }
 
 // abortWatcher will be watching for the abort signal and revert the chaos
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, attachedDisksWithInstance map[string]*[]compute.DataDisk, instanceNamesWithDiskNames map[string][]string, chaosDetails *types.ChaosDetails) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, attachedDisksWithInstance map[string]*[]compute.DataDisk, instanceNamesWithDiskNames map[string][]string, resultName, chaosNS string) {
 	<-abort
 
 	log.Info("[Abort]: Chaos Revert Started")
@@ -277,7 +278,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, attache
 				if err := diskStatus.AttachDisk(experimentsDetails.SubscriptionID, experimentsDetails.ResourceGroup, instanceName, experimentsDetails.ScaleSet, diskList); err != nil {
 					log.Errorf("failed to attach disk, manual revert required, err: %v", err)
 				} else {
-					common.SetTargets(*disk.Name, "re-attached", "VirtualDisk", chaosDetails)
+					if err = result.AnnotateChaosResult(resultName, chaosNS, "re-attached", "VirtualDisk", *disk.Name); err != nil {
+						log.Errorf("unable to annotate the chaosresult, err :%v", err)
+					}
 				}
 			}
 		}

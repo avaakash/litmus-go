@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/gcp/gcp-vm-disk-loss/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -57,7 +58,7 @@ func PrepareDiskVolumeLossByLabel(computeService *compute.Service, experimentsDe
 
 	default:
 		// watching for the abort signal and revert the chaos
-		go abortWatcher(computeService, experimentsDetails, diskVolumeNamesList, experimentsDetails.TargetDiskInstanceNamesList, experimentsDetails.Zones, abort, chaosDetails)
+		go abortWatcher(computeService, experimentsDetails, diskVolumeNamesList, experimentsDetails.Zones, abort, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":
@@ -238,16 +239,16 @@ func injectChaosInParallelMode(computeService *compute.Service, experimentsDetai
 }
 
 // AbortWatcher will watching for the abort signal and revert the chaos
-func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, targetDiskVolumeNamesList, instanceNamesList []string, zone string, abort chan os.Signal, chaosDetails *types.ChaosDetails) {
+func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesList []string, zone string, abort chan os.Signal, resultName, chaosNS string) {
 
 	<-abort
 
 	log.Info("[Abort]: Chaos Revert Started")
 
-	for i := range targetDiskVolumeNamesList {
+	for i := range experimentsDetails.TargetDiskVolumeNamesList {
 
 		//Getting the disk volume attachment status
-		diskState, err := gcp.GetDiskVolumeState(computeService, targetDiskVolumeNamesList[i], experimentsDetails.GCPProjectID, instanceNamesList[i], zone)
+		diskState, err := gcp.GetDiskVolumeState(computeService, experimentsDetails.TargetDiskVolumeNamesList[i], experimentsDetails.GCPProjectID, instanceNamesList[i], zone)
 		if err != nil {
 			log.Errorf("failed to get the disk state when an abort signal is received, err: %v", err)
 		}
@@ -258,20 +259,22 @@ func abortWatcher(computeService *compute.Service, experimentsDetails *experimen
 			//We first wait for the volume to get in detached state then we are attaching it.
 			log.Info("[Abort]: Wait for complete disk volume detachment")
 
-			if err = gcp.WaitForVolumeDetachment(computeService, targetDiskVolumeNamesList[i], experimentsDetails.GCPProjectID, instanceNamesList[i], zone, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
+			if err = gcp.WaitForVolumeDetachment(computeService, experimentsDetails.TargetDiskVolumeNamesList[i], experimentsDetails.GCPProjectID, instanceNamesList[i], zone, experimentsDetails.Delay, experimentsDetails.Timeout); err != nil {
 				log.Errorf("unable to detach the disk volume, err: %v", err)
 			}
 
 			//Attaching the disk volume from the instance
 			log.Info("[Chaos]: Attaching the disk volume from the instance")
 
-			err = gcp.DiskVolumeAttach(computeService, instanceNamesList[i], experimentsDetails.GCPProjectID, zone, experimentsDetails.DeviceNamesList[i], targetDiskVolumeNamesList[i])
+			err = gcp.DiskVolumeAttach(computeService, instanceNamesList[i], experimentsDetails.GCPProjectID, zone, experimentsDetails.DeviceNamesList[i], experimentsDetails.TargetDiskVolumeNamesList[i])
 			if err != nil {
 				log.Errorf("disk attachment failed when an abort signal is received, err: %v", err)
 			}
 		}
 
-		common.SetTargets(targetDiskVolumeNamesList[i], "reverted", "DiskVolume", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "DiskVolume", experimentsDetails.TargetDiskVolumeNamesList[i]); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 
 	log.Info("[Abort]: Chaos Revert Completed")

@@ -10,12 +10,13 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/kube-aws/ebs-loss/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
 )
 
-//InjectChaosInSerialMode will inject the ebs loss chaos in serial mode which means one after other
+// InjectChaosInSerialMode will inject the ebs loss chaos in serial mode which means one after other
 func InjectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetails, targetEBSVolumeIDList []string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	//ChaosStartTimeStamp contains the start timestamp, when the chaos injection begin
@@ -92,7 +93,7 @@ func InjectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetai
 	return nil
 }
 
-//InjectChaosInParallelMode will inject the chaos in parallel mode that means all at once
+// InjectChaosInParallelMode will inject the chaos in parallel mode that means all at once
 func InjectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDetails, targetEBSVolumeIDList []string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	var ec2InstanceIDList, deviceList []string
@@ -184,7 +185,7 @@ func InjectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 }
 
 // AbortWatcher will watching for the abort signal and revert the chaos
-func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, volumeIDList []string, abort chan os.Signal, chaosDetails *types.ChaosDetails) {
+func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, volumeIDList []string, abort chan os.Signal, resultName, chaosNS string) {
 
 	<-abort
 
@@ -216,7 +217,9 @@ func AbortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, volumeI
 				log.Errorf("ebs attachment failed when an abort signal is received, err: %v", err)
 			}
 		}
-		common.SetTargets(volumeID, "reverted", "EBS", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "EBS", volumeID); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 	log.Info("[Abort]: Chaos Revert Completed")
 	os.Exit(1)

@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/kube-aws/ec2-terminate-by-tag/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -21,7 +22,7 @@ import (
 
 var inject, abort chan os.Signal
 
-//PrepareEC2TerminateByTag contains the prepration and injection steps for the experiment
+// PrepareEC2TerminateByTag contains the prepration and injection steps for the experiment
 func PrepareEC2TerminateByTag(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -44,7 +45,7 @@ func PrepareEC2TerminateByTag(experimentsDetails *experimentTypes.ExperimentDeta
 	log.Infof("[Chaos]:Number of Instance targeted: %v", len(instanceIDList))
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, instanceIDList, chaosDetails)
+	go abortWatcher(experimentsDetails, instanceIDList, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -67,7 +68,7 @@ func PrepareEC2TerminateByTag(experimentsDetails *experimentTypes.ExperimentDeta
 	return nil
 }
 
-//injectChaosInSerialMode will inject the ce2 instance termination in serial mode that is one after other
+// injectChaosInSerialMode will inject the ce2 instance termination in serial mode that is one after other
 func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	select {
@@ -216,7 +217,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 	return nil
 }
 
-//SetTargetInstance will select the target instance which are in running state and filtered from the given instance tag
+// SetTargetInstance will select the target instance which are in running state and filtered from the given instance tag
 func SetTargetInstance(experimentsDetails *experimentTypes.ExperimentDetails) error {
 
 	instanceIDList, err := awslib.GetInstanceList(experimentsDetails.InstanceTag, experimentsDetails.Region)
@@ -248,8 +249,8 @@ func SetTargetInstance(experimentsDetails *experimentTypes.ExperimentDetails) er
 	return nil
 }
 
-// watching for the abort signal and revert the chaos
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, chaosDetails *types.ChaosDetails) {
+// abortWatcher will watch for the abort signal and revert the chaos
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, resultName, chaosNS string) {
 
 	<-abort
 
@@ -272,7 +273,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanc
 				log.Errorf("ec2 instance failed to start when an abort signal is received, err: %v", err)
 			}
 		}
-		common.SetTargets(id, "reverted", "EC2", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "EC2", id); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 	log.Info("[Abort]: Chaos Revert Completed")
 	os.Exit(1)

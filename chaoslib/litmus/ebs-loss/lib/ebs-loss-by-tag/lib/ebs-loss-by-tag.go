@@ -20,7 +20,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareEBSLossByTag contains the prepration and injection steps for the experiment
+// PrepareEBSLossByTag contains the prepration and injection steps for the experiment
 func PrepareEBSLossByTag(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -49,7 +49,7 @@ func PrepareEBSLossByTag(experimentsDetails *experimentTypes.ExperimentDetails, 
 		log.Infof("[Chaos]:Number of volumes targeted: %v", len(targetEBSVolumeIDList))
 
 		// watching for the abort signal and revert the chaos
-		go ebsloss.AbortWatcher(experimentsDetails, targetEBSVolumeIDList, abort, chaosDetails)
+		go ebsloss.AbortWatcher(experimentsDetails, targetEBSVolumeIDList, abort, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":

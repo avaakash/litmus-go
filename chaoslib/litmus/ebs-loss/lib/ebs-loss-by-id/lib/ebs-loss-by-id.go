@@ -20,7 +20,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareEBSLossByID contains the prepration and injection steps for the experiment
+// PrepareEBSLossByID contains the prepration and injection steps for the experiment
 func PrepareEBSLossByID(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -51,7 +51,7 @@ func PrepareEBSLossByID(experimentsDetails *experimentTypes.ExperimentDetails, c
 			return errors.Errorf("no volume id found to detach")
 		}
 		// watching for the abort signal and revert the chaos
-		go ebsloss.AbortWatcher(experimentsDetails, volumeIDList, abort, chaosDetails)
+		go ebsloss.AbortWatcher(experimentsDetails, volumeIDList, abort, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":

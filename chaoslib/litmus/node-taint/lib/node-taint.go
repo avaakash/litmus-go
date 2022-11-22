@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/generic/node-taint/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/status"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
@@ -26,7 +27,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareNodeTaint contains the prepration steps before chaos injection
+// PrepareNodeTaint contains the prepration steps before chaos injection
 func PrepareNodeTaint(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -67,7 +68,7 @@ func PrepareNodeTaint(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	}
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, clients, resultDetails, chaosDetails, eventsDetails)
+	go abortWatcher(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	// taint the application node
 	if err := taintNode(experimentsDetails, clients, chaosDetails); err != nil {
@@ -95,7 +96,7 @@ func PrepareNodeTaint(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	log.Info("[Chaos]: Stopping the experiment")
 
 	// remove taint from the application node
-	if err := removeTaintFromNode(experimentsDetails, clients, chaosDetails); err != nil {
+	if err := removeTaintFromNode(experimentsDetails, clients, resultDetails.Name, chaosDetails.ChaosNamespace); err != nil {
 		return err
 	}
 
@@ -156,7 +157,7 @@ func taintNode(experimentsDetails *experimentTypes.ExperimentDetails, clients cl
 }
 
 // removeTaintFromNode remove the taint from the application node
-func removeTaintFromNode(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails) error {
+func removeTaintFromNode(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultName, chaosNS string) error {
 
 	// Get the taint key
 	taintLabel := strings.Split(experimentsDetails.Taints, ":")
@@ -192,7 +193,9 @@ func removeTaintFromNode(experimentsDetails *experimentTypes.ExperimentDetails, 
 		}
 	}
 
-	common.SetTargets(node.Name, "reverted", "node", chaosDetails)
+	if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "node", node.Name); err != nil {
+		log.Errorf("unable to annotate the chaosresult, err :%v", err)
+	}
 
 	log.Infof("Successfully removed taint from the %v node", node.Name)
 	return nil
@@ -222,7 +225,7 @@ func getTaintDetails(experimentsDetails *experimentTypes.ExperimentDetails) (str
 }
 
 // abortWatcher continuously watch for the abort signals
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, chaosDetails *types.ChaosDetails, eventsDetails *types.EventDetails) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultName, chaosNS string) {
 	// waiting till the abort signal received
 	<-abort
 
@@ -231,7 +234,7 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients
 	// retry thrice for the chaos revert
 	retry := 3
 	for retry > 0 {
-		if err := removeTaintFromNode(experimentsDetails, clients, chaosDetails); err != nil {
+		if err := removeTaintFromNode(experimentsDetails, clients, resultName, chaosNS); err != nil {
 			log.Errorf("Unable to untaint node, err: %v", err)
 		}
 		retry--

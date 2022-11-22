@@ -14,6 +14,7 @@ import (
 	"github.com/litmuschaos/litmus-go/pkg/events"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ func PrepareAzureStop(experimentsDetails *experimentTypes.ExperimentDetails, cli
 	}
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, instanceNameList)
+	go abortWatcher(experimentsDetails, instanceNameList, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -234,7 +235,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 }
 
 // watching for the abort signal and revert the chaos
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceNameList []string) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceNameList []string, resultName, chaosNS string) {
 	<-abort
 
 	var instanceState string
@@ -273,6 +274,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanc
 		if err != nil {
 			log.Errorf("[Abort]: Instance power on status check failed, err: %v", err)
 			log.Errorf("[Abort]: Azure instance %v failed to start after an abort signal is received", vmName)
+		}
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "VM", vmName); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
 		}
 	}
 	log.Infof("[Abort]: Chaos Revert Completed")

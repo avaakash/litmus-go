@@ -26,7 +26,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareAndInjectChaos contains the prepration & injection steps
+// PrepareAndInjectChaos contains the prepration & injection steps
 func PrepareAndInjectChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -81,7 +81,7 @@ func PrepareAndInjectChaos(experimentsDetails *experimentTypes.ExperimentDetails
 	})
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, clients, chaosDetails, resultDetails, targetPodList, runID)
+	go abortWatcher(experimentsDetails, clients, targetPodList, runID, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	// run the probes during chaos
 	if len(resultDetails.ProbeDetails) != 0 {
@@ -114,7 +114,7 @@ func PrepareAndInjectChaos(experimentsDetails *experimentTypes.ExperimentDetails
 	common.WaitForDuration(experimentsDetails.ChaosDuration)
 
 	// deleting the network policy after chaos duration over
-	if err := deleteNetworkPolicy(experimentsDetails, clients, targetPodList, chaosDetails, experimentsDetails.Timeout, experimentsDetails.Delay, runID); err != nil {
+	if err := deleteNetworkPolicy(experimentsDetails, clients, targetPodList, experimentsDetails.Timeout, experimentsDetails.Delay, runID, resultDetails.Name, chaosDetails.ChaosNamespace); err != nil {
 		return err
 	}
 
@@ -161,7 +161,7 @@ func createNetworkPolicy(experimentsDetails *experimentTypes.ExperimentDetails, 
 }
 
 // deleteNetworkPolicy deletes the network policy and wait until the network policy deleted completely
-func deleteNetworkPolicy(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, targetPodList *corev1.PodList, chaosDetails *types.ChaosDetails, timeout, delay int, runID string) error {
+func deleteNetworkPolicy(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, targetPodList *corev1.PodList, timeout, delay int, runID, resultName, chaosNS string) error {
 	name := experimentsDetails.ExperimentName + "-np-" + runID
 	labels := "name=" + experimentsDetails.ExperimentName + "-np-" + runID
 	if err := clients.KubeClient.NetworkingV1().NetworkPolicies(experimentsDetails.AppNS).Delete(context.Background(), name, v1.DeleteOptions{}); err != nil {
@@ -184,7 +184,9 @@ func deleteNetworkPolicy(experimentsDetails *experimentTypes.ExperimentDetails, 
 	}
 
 	for _, pod := range targetPodList.Items {
-		common.SetTargets(pod.Name, "reverted", "pod", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "pod", pod.Name); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 	return nil
 }
@@ -206,7 +208,7 @@ func checkExistanceOfPolicy(experimentsDetails *experimentTypes.ExperimentDetail
 }
 
 // abortWatcher continuously watch for the abort signals
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, chaosDetails *types.ChaosDetails, resultDetails *types.ResultDetails, targetPodList *corev1.PodList, runID string) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, targetPodList *corev1.PodList, runID, resultName, chaosNS string) {
 	// waiting till the abort signal received
 	<-abort
 
@@ -221,14 +223,10 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, clients
 			continue
 		}
 
-		if err := deleteNetworkPolicy(experimentsDetails, clients, targetPodList, chaosDetails, 2, 1, runID); err != nil {
+		if err := deleteNetworkPolicy(experimentsDetails, clients, targetPodList, 2, 1, runID, resultName, chaosNS); err != nil {
 			log.Errorf("unable to delete network policy, err: %v", err)
 		}
 	}
-	// updating the chaosresult after stopped
-	failStep := "Chaos injection stopped!"
-	types.SetResultAfterCompletion(resultDetails, "Stopped", "Stopped", failStep)
-	result.ChaosResult(chaosDetails, clients, resultDetails, "EOT")
 	log.Info("Chaos Revert Completed")
 	os.Exit(0)
 }

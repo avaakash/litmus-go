@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/kube-aws/ec2-terminate-by-id/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -23,7 +24,7 @@ var (
 	inject, abort chan os.Signal
 )
 
-//PrepareEC2TerminateByID contains the prepration and injection steps for the experiment
+// PrepareEC2TerminateByID contains the prepration and injection steps for the experiment
 func PrepareEC2TerminateByID(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	// inject channel is used to transmit signal notifications.
@@ -49,7 +50,7 @@ func PrepareEC2TerminateByID(experimentsDetails *experimentTypes.ExperimentDetai
 	}
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(experimentsDetails, instanceIDList, chaosDetails)
+	go abortWatcher(experimentsDetails, instanceIDList, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -72,7 +73,7 @@ func PrepareEC2TerminateByID(experimentsDetails *experimentTypes.ExperimentDetai
 	return nil
 }
 
-//injectChaosInSerialMode will inject the ec2 instance termination in serial mode that is one after other
+// injectChaosInSerialMode will inject the ec2 instance termination in serial mode that is one after other
 func injectChaosInSerialMode(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	select {
@@ -224,7 +225,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 }
 
 // watching for the abort signal and revert the chaos
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, chaosDetails *types.ChaosDetails) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanceIDList []string, resultName, chaosNS string) {
 
 	<-abort
 
@@ -247,7 +248,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, instanc
 				log.Errorf("ec2 instance failed to start when an abort signal is received, err: %v", err)
 			}
 		}
-		common.SetTargets(id, "reverted", "EC2", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "EC2", id); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 	log.Info("[Abort]: Chaos Revert Completed")
 	os.Exit(1)

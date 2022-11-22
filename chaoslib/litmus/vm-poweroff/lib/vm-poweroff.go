@@ -12,6 +12,7 @@ import (
 	"github.com/litmuschaos/litmus-go/pkg/events"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/vmware/vm-poweroff/types"
@@ -43,7 +44,7 @@ func InjectVMPowerOffChaos(experimentsDetails *experimentTypes.ExperimentDetails
 	vmIdList := strings.Split(experimentsDetails.VMIds, ",")
 
 	// Calling AbortWatcher go routine, it will continuously watch for the abort signal and generate the required events and result
-	go abortWatcher(experimentsDetails, vmIdList, clients, resultDetails, chaosDetails, eventsDetails, cookie)
+	go abortWatcher(experimentsDetails, vmIdList, clients, cookie, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -221,7 +222,7 @@ func injectChaosInParallelMode(experimentsDetails *experimentTypes.ExperimentDet
 }
 
 // abortWatcher watches for the abort signal and reverts the chaos
-func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, vmIdList []string, clients clients.ClientSets, resultDetails *types.ResultDetails, chaosDetails *types.ChaosDetails, eventsDetails *types.EventDetails, cookie string) {
+func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, vmIdList []string, clients clients.ClientSets, cookie, resultName, chaosNS string) {
 	<-abort
 
 	log.Info("[Abort]: Chaos Revert Started")
@@ -244,8 +245,9 @@ func abortWatcher(experimentsDetails *experimentTypes.ExperimentDetails, vmIdLis
 				log.Errorf("vm %s failed to start when an abort signal was received: %s", vmId, err.Error())
 			}
 		}
-
-		common.SetTargets(vmId, "reverted", "VM", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "VM", vmId); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 
 	log.Info("[Abort]: Chaos Revert Completed")

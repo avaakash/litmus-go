@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/gcp/gcp-vm-instance-stop/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -44,7 +45,7 @@ func PrepareVMStopByLabel(computeService *compute.Service, experimentsDetails *e
 	log.Infof("[Chaos]:Number of Instance targeted: %v", len(instanceNamesList))
 
 	// watching for the abort signal and revert the chaos
-	go abortWatcher(computeService, experimentsDetails, instanceNamesList, chaosDetails)
+	go abortWatcher(computeService, experimentsDetails, instanceNamesList, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -252,7 +253,7 @@ func injectChaosInParallelMode(computeService *compute.Service, experimentsDetai
 }
 
 // abortWatcher watches for the abort signal and reverts the chaos
-func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesList []string, chaosDetails *types.ChaosDetails) {
+func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesList []string, resultName, chaosNS string) {
 
 	<-abort
 
@@ -275,7 +276,9 @@ func abortWatcher(computeService *compute.Service, experimentsDetails *experimen
 				log.Errorf("vm instance failed to start when an abort signal is received, err: %v", err)
 			}
 		}
-		common.SetTargets(instanceNamesList[i], "reverted", "VM", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "VM", instanceNamesList[i]); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 
 	log.Info("[Abort]: Chaos Revert Completed")

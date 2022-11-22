@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/gcp/gcp-vm-disk-loss/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -61,7 +62,7 @@ func PrepareDiskVolumeLoss(computeService *compute.Service, experimentsDetails *
 	default:
 
 		// watching for the abort signal and revert the chaos
-		go abortWatcher(computeService, experimentsDetails, diskNamesList, diskZonesList, abort, chaosDetails)
+		go abortWatcher(computeService, experimentsDetails, diskNamesList, diskZonesList, abort, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 		switch strings.ToLower(experimentsDetails.Sequence) {
 		case "serial":
@@ -235,7 +236,7 @@ func injectChaosInParallelMode(computeService *compute.Service, experimentsDetai
 }
 
 // AbortWatcher will watching for the abort signal and revert the chaos
-func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, targetDiskVolumeNamesList, diskZonesList []string, abort chan os.Signal, chaosDetails *types.ChaosDetails) {
+func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, targetDiskVolumeNamesList, diskZonesList []string, abort chan os.Signal, resultName, chaosNS string) {
 
 	<-abort
 
@@ -267,8 +268,9 @@ func abortWatcher(computeService *compute.Service, experimentsDetails *experimen
 				log.Errorf("disk attachment failed when an abort signal is received, err: %v", err)
 			}
 		}
-
-		common.SetTargets(targetDiskVolumeNamesList[i], "reverted", "DiskVolume", chaosDetails)
+		if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "DiskVolume", targetDiskVolumeNamesList[i]); err != nil {
+			log.Errorf("unable to annotate the chaosresult, err :%v", err)
+		}
 	}
 
 	log.Info("[Abort]: Chaos Revert Completed")

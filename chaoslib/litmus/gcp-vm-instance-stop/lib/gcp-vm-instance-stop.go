@@ -13,6 +13,7 @@ import (
 	experimentTypes "github.com/litmuschaos/litmus-go/pkg/gcp/gcp-vm-instance-stop/types"
 	"github.com/litmuschaos/litmus-go/pkg/log"
 	"github.com/litmuschaos/litmus-go/pkg/probe"
+	"github.com/litmuschaos/litmus-go/pkg/result"
 	"github.com/litmuschaos/litmus-go/pkg/types"
 	"github.com/litmuschaos/litmus-go/pkg/utils/common"
 	"github.com/pkg/errors"
@@ -49,7 +50,7 @@ func PrepareVMStop(computeService *compute.Service, experimentsDetails *experime
 	// get the zone name or list of corresponding zones for the instances
 	instanceZonesList := strings.Split(experimentsDetails.Zones, ",")
 
-	go abortWatcher(computeService, experimentsDetails, instanceNamesList, instanceZonesList, chaosDetails)
+	go abortWatcher(computeService, experimentsDetails, instanceNamesList, instanceZonesList, resultDetails.Name, chaosDetails.ChaosNamespace)
 
 	switch strings.ToLower(experimentsDetails.Sequence) {
 	case "serial":
@@ -256,7 +257,7 @@ func injectChaosInParallelMode(computeService *compute.Service, experimentsDetai
 }
 
 // abortWatcher watches for the abort signal and reverts the chaos
-func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesList []string, zonesList []string, chaosDetails *types.ChaosDetails) {
+func abortWatcher(computeService *compute.Service, experimentsDetails *experimentTypes.ExperimentDetails, instanceNamesList []string, zonesList []string, resultName, chaosNS string) {
 	<-abort
 
 	log.Info("[Abort]: Chaos Revert Started")
@@ -283,8 +284,9 @@ func abortWatcher(computeService *compute.Service, experimentsDetails *experimen
 					log.Errorf("%s vm instance failed to start when an abort signal is received, err: %v", instanceNamesList[i], err)
 				}
 			}
-
-			common.SetTargets(instanceNamesList[i], "reverted", "VM", chaosDetails)
+			if err = result.AnnotateChaosResult(resultName, chaosNS, "reverted", "VM", instanceNamesList[i]); err != nil {
+				log.Errorf("unable to annotate the chaosresult, err :%v", err)
+			}
 		}
 	}
 
