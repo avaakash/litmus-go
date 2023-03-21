@@ -38,6 +38,8 @@ type ExperimentDetails struct {
 	TargetServicePort int
 	Toxicity          int
 	ProxyPort         int
+	Direction         string
+	PathFilter        string
 
 	Latency            int
 	ResetTimeout       int

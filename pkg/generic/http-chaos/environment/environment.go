@@ -36,6 +36,8 @@ func GetENV(experimentDetails *experimentTypes.ExperimentDetails, expName string
 	experimentDetails.TargetServicePort, _ = strconv.Atoi(types.Getenv("TARGET_SERVICE_PORT", "80"))
 	experimentDetails.ProxyPort, _ = strconv.Atoi(types.Getenv("PROXY_PORT", "20000"))
 	experimentDetails.Toxicity, _ = strconv.Atoi(types.Getenv("TOXICITY", "100"))
+	experimentDetails.PathFilter = types.Getenv("PATH_FILTER", "")
+	experimentDetails.Direction = types.Getenv("DIRECTION", "incoming")
 
 	switch expName {
 	case "pod-http-latency":

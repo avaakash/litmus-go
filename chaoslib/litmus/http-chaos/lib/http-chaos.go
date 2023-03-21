@@ -22,7 +22,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//PrepareAndInjectChaos contains the preparation & injection steps
+// PrepareAndInjectChaos contains the preparation & injection steps
 func PrepareAndInjectChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails, args string) error {
 
 	var err error
@@ -279,13 +279,15 @@ func getPodEnv(experimentsDetails *experimentTypes.ExperimentDetails, targets, a
 		SetEnv("TARGET_SERVICE_PORT", strconv.Itoa(experimentsDetails.TargetServicePort)).
 		SetEnv("PROXY_PORT", strconv.Itoa(experimentsDetails.ProxyPort)).
 		SetEnv("TOXICITY", strconv.Itoa(experimentsDetails.Toxicity)).
+		SetEnv("DIRECTION", experimentsDetails.Direction).
+		SetEnv("PATH_FILTER", experimentsDetails.PathFilter).
 		SetEnvFromDownwardAPI("v1", "metadata.name")
 
 	return envDetails.ENV
 }
 
-//SetChaosTunables will set up a random value within a given range of values
-//If the value is not provided in range it'll set up the initial provided value.
+// SetChaosTunables will set up a random value within a given range of values
+// If the value is not provided in range it'll set up the initial provided value.
 func SetChaosTunables(experimentsDetails *experimentTypes.ExperimentDetails) {
 	experimentsDetails.PodsAffectedPerc = common.ValidateRange(experimentsDetails.PodsAffectedPerc)
 	experimentsDetails.Sequence = common.GetRandomSequence(experimentsDetails.Sequence)

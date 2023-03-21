@@ -2,14 +2,15 @@ package helper
 
 import (
 	"fmt"
-	"github.com/litmuschaos/litmus-go/pkg/cerrors"
-	"github.com/palantir/stacktrace"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/litmuschaos/litmus-go/pkg/cerrors"
+	"github.com/palantir/stacktrace"
 
 	clients "github.com/litmuschaos/litmus-go/pkg/clients"
 	"github.com/litmuschaos/litmus-go/pkg/events"
@@ -157,16 +158,22 @@ func prepareK8sHttpChaos(experimentsDetails *experimentTypes.ExperimentDetails, 
 
 // injectChaos inject the http chaos in target container and add ruleset to the iptables to redirect the ports
 func injectChaos(experimentDetails *experimentTypes.ExperimentDetails, t targetDetails) error {
+	if err := createProxyUser(t.Pid, t.Source); err != nil {
+		if killErr := deleteProxyUser(t.Pid, t.Source); killErr != nil {
+			return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(killErr).Error())}
+		}
+		return stacktrace.Propagate(err, "could not create proxy user")
+	}
+
 	if err := startProxy(experimentDetails, t.Pid); err != nil {
-		killErr := killProxy(t.Pid, t.Source)
-		if killErr != nil {
+		if killErr := killProxy(t.Pid, t.Source); killErr != nil {
 			return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(killErr).Error())}
 		}
 		return stacktrace.Propagate(err, "could not start proxy server")
 	}
+
 	if err := addIPRuleSet(experimentDetails, t.Pid); err != nil {
-		killErr := killProxy(t.Pid, t.Source)
-		if killErr != nil {
+		if killErr := killProxy(t.Pid, t.Source); killErr != nil {
 			return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s,%s]", stacktrace.RootCause(err).Error(), stacktrace.RootCause(killErr).Error())}
 		}
 		return stacktrace.Propagate(err, "could not add ip rules")
@@ -186,10 +193,31 @@ func revertChaos(experimentDetails *experimentTypes.ExperimentDetails, t targetD
 	if err := killProxy(t.Pid, t.Source); err != nil {
 		errList = append(errList, err.Error())
 	}
+
+	if err := deleteProxyUser(t.Pid, t.Source); err != nil {
+		errList = append(errList, err.Error())
+	}
+
 	if len(errList) != 0 {
 		return cerrors.PreserveError{ErrString: fmt.Sprintf("[%s]", strings.Join(errList, ","))}
 	}
 	log.Infof("successfully reverted chaos on target: {name: %s, namespace: %v, container: %v}", t.Name, t.Namespace, t.TargetContainer)
+	return nil
+}
+
+func createProxyUser(pid int, source string) error {
+	createUserCommand := fmt.Sprintf("sudo nsenter -t %d -n useradd -m -s /bin/bash chaosproxyuser", pid)
+	if err := common.RunBashCommand(createUserCommand, "failed to create proxy user", source); err != nil {
+		return stacktrace.Propagate(err, "could not create proxy user")
+	}
+	return nil
+}
+
+func deleteProxyUser(pid int, source string) error {
+	deleteUserCommand := fmt.Sprintf("sudo nsenter -t %d -n userdel -m -s /bin/bash chaosproxyuser", pid)
+	if err := common.RunBashCommand(deleteUserCommand, "failed to delete proxy user", source); err != nil {
+		return stacktrace.Propagate(err, "could not delete proxy user")
+	}
 	return nil
 }
 
@@ -201,13 +229,14 @@ func startProxy(experimentDetails *experimentTypes.ExperimentDetails, pid int) e
 	toxics := os.Getenv("TOXIC_COMMAND")
 
 	// starting toxiproxy server inside the target container
-	startProxyServerCommand := fmt.Sprintf("(sudo nsenter -t %d -n toxiproxy-server -host=0.0.0.0 > /dev/null 2>&1 &)", pid)
+	startProxyServerCommand := fmt.Sprintf(
+		"(sudo nsenter -t %d -n -u chaosproxyuser -H bash -c 'mitmdump --mode %v --listen-port %v %v > /dev/null 2>&1 &')",
+		pid, getMode(experimentDetails.Direction, experimentDetails.TargetServicePort), experimentDetails.ProxyPort, toxics,
+	)
 	// Creating a proxy for the targeted service in the target container
-	createProxyCommand := fmt.Sprintf("(sudo nsenter -t %d -n toxiproxy-cli create -l 0.0.0.0:%d -u 0.0.0.0:%d proxy)", pid, experimentDetails.ProxyPort, experimentDetails.TargetServicePort)
-	createToxicCommand := fmt.Sprintf("(sudo nsenter -t %d -n toxiproxy-cli toxic add %s --toxicity %f proxy)", pid, toxics, float32(experimentDetails.Toxicity)/100.0)
 
 	// sleep 2 is added for proxy-server to be ready for creating proxy and adding toxics
-	chaosCommand := fmt.Sprintf("%s && sleep 2 && %s && %s", startProxyServerCommand, createProxyCommand, createToxicCommand)
+	chaosCommand := startProxyServerCommand
 
 	log.Infof("[Chaos]: Starting proxy server")
 
@@ -225,7 +254,7 @@ const NoProxyToKill = "you need to specify whom to kill"
 // it is using nsenter command to enter into network namespace of target container
 // and execute the proxy related command inside it.
 func killProxy(pid int, source string) error {
-	stopProxyServerCommand := fmt.Sprintf("sudo nsenter -t %d -n sudo kill -9 $(ps aux | grep [t]oxiproxy | awk 'FNR==1{print $1}')", pid)
+	stopProxyServerCommand := fmt.Sprintf("sudo nsenter -t %d -n sudo kill -9 $(ps aux | grep [m]itmproxy | awk 'FNR==1{print $1}')", pid)
 	log.Infof("[Chaos]: Stopping proxy server")
 
 	if err := common.RunBashCommand(stopProxyServerCommand, "failed to stop proxy server", source); err != nil {
@@ -240,10 +269,15 @@ func killProxy(pid int, source string) error {
 // it is using nsenter command to enter into network namespace of target container
 // and execute the iptables related command inside it.
 func addIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid int) error {
-	// it adds the proxy port REDIRECT iprule in the beginning of the PREROUTING table
-	// so that it always matches all the incoming packets for the matching target port filters and
+	// it adds the proxy port REDIRECT iprule in the beginning of the PREROUTING or OUTGOING table
+	// based on the direction of traffic specified in the experiment
+	// so that it always matches all the incoming/outgoing packets for the matching target port filters and
 	// if matches then it redirect the request to the proxy port
-	addIPRuleSetCommand := fmt.Sprintf("(sudo nsenter -t %d -n iptables -t nat -I PREROUTING -i %v -p tcp --dport %d -j REDIRECT --to-port %d)", pid, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
+	mode := "PREROUTING"
+	if strings.ToLower(experimentDetails.Direction) == "outgoing" {
+		mode = "OUTPUT"
+	}
+	addIPRuleSetCommand := fmt.Sprintf("(sudo nsenter -t %d -n iptables -t nat -I %v -i %v -p tcp -m owner ! --uid-owner chaosproxyuser --dport %d -j REDIRECT --to-port %d)", pid, mode, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
 	log.Infof("[Chaos]: Adding IPtables ruleset")
 
 	if err := common.RunBashCommand(addIPRuleSetCommand, "failed to add ip rules", experimentDetails.ChaosPodName); err != nil {
@@ -260,7 +294,11 @@ const NoIPRulesetToRemove = "No chain/target/match by that name"
 // it is using nsenter command to enter into network namespace of target container
 // and execute the iptables related command inside it.
 func removeIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid int) error {
-	removeIPRuleSetCommand := fmt.Sprintf("sudo nsenter -t %d -n iptables -t nat -D PREROUTING -i %v -p tcp --dport %d -j REDIRECT --to-port %d", pid, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
+	mode := "PREROUTING"
+	if strings.ToLower(experimentDetails.Direction) == "outgoing" {
+		mode = "OUTPUT"
+	}
+	removeIPRuleSetCommand := fmt.Sprintf("sudo nsenter -t %d -n iptables -t nat -D %v -i %v -p tcp -m owner ! --uid-owner chaosproxyuser --dport %d -j REDIRECT --to-port %d", pid, mode, experimentDetails.NetworkInterface, experimentDetails.TargetServicePort, experimentDetails.ProxyPort)
 	log.Infof("[Chaos]: Removing IPtables ruleset")
 
 	if err := common.RunBashCommand(removeIPRuleSetCommand, "failed to remove ip rules", experimentDetails.ChaosPodName); err != nil {
@@ -271,12 +309,20 @@ func removeIPRuleSet(experimentDetails *experimentTypes.ExperimentDetails, pid i
 	return nil
 }
 
+func getMode(requestType string, targetPort int) string {
+	mode := fmt.Sprintf("reverse:0.0.0.0:%v", targetPort)
+	if strings.ToLower(requestType) == "outgoing" {
+		mode = "transparent"
+	}
+	return mode
+}
+
 // getENV fetches all the env variables from the runner pod
 func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.ExperimentName = types.Getenv("EXPERIMENT_NAME", "")
 	experimentDetails.InstanceID = types.Getenv("INSTANCE_ID", "")
 	experimentDetails.ChaosDuration, _ = strconv.Atoi(types.Getenv("TOTAL_CHAOS_DURATION", ""))
-	experimentDetails.ChaosNamespace = types.Getenv("CHAOS_NAMESPACE", "litmus")
+	experimentDetails.ChaosNamespace = types.Getenv("CHAOS_NAMESPACE", "")
 	experimentDetails.EngineName = types.Getenv("CHAOSENGINE", "")
 	experimentDetails.ChaosUID = clientTypes.UID(types.Getenv("CHAOS_UID", ""))
 	experimentDetails.ChaosPodName = types.Getenv("POD_NAME", "")
@@ -286,6 +332,8 @@ func getENV(experimentDetails *experimentTypes.ExperimentDetails) {
 	experimentDetails.TargetServicePort, _ = strconv.Atoi(types.Getenv("TARGET_SERVICE_PORT", ""))
 	experimentDetails.ProxyPort, _ = strconv.Atoi(types.Getenv("PROXY_PORT", ""))
 	experimentDetails.Toxicity, _ = strconv.Atoi(types.Getenv("TOXICITY", "100"))
+	experimentDetails.PathFilter = types.Getenv("PATH_FILTER", "")
+	experimentDetails.Direction = types.Getenv("DIRECTION", "incoming")
 }
 
 // abortWatcher continuously watch for the abort signals

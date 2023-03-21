@@ -11,18 +11,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-//PodHttpLatencyChaos contains the steps to prepare and inject http latency chaos
+// PodHttpLatencyChaos contains the steps to prepare and inject http latency chaos
 func PodHttpLatencyChaos(experimentsDetails *experimentTypes.ExperimentDetails, clients clients.ClientSets, resultDetails *types.ResultDetails, eventsDetails *types.EventDetails, chaosDetails *types.ChaosDetails) error {
 
 	log.InfoWithValues("[Info]: The chaos tunables are:", logrus.Fields{
-		"Target Port":      experimentsDetails.TargetServicePort,
-		"Listen Port":      experimentsDetails.ProxyPort,
 		"Sequence":         experimentsDetails.Sequence,
 		"PodsAffectedPerc": experimentsDetails.PodsAffectedPerc,
+		"Target Port":      experimentsDetails.TargetServicePort,
+		"Listen Port":      experimentsDetails.ProxyPort,
+		"Direction":        experimentsDetails.Direction,
+		"Path Filter":      experimentsDetails.PathFilter,
 		"Toxicity":         experimentsDetails.Toxicity,
 		"Latency":          experimentsDetails.Latency,
 	})
 
-	args := "-t latency -a latency=" + strconv.Itoa(experimentsDetails.Latency)
+	args := "--latency %v" + strconv.Itoa(experimentsDetails.Latency)
+	if experimentsDetails.PathFilter != "" {
+		args = args + " --path %v" + experimentsDetails.PathFilter
+	}
 	return http_chaos.PrepareAndInjectChaos(experimentsDetails, clients, resultDetails, eventsDetails, chaosDetails, args)
 }
